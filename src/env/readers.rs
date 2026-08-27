@@ -35,7 +35,8 @@ pub fn is_example_file(name: &str) -> bool {
 /// without counting as an example for side A.
 pub fn is_committed_env(name: &str) -> bool {
     static RX: OnceLock<Regex> = OnceLock::new();
-    RX.get_or_init(|| Regex::new(r"(?i)^\.?env(\.[\w.-]+)?$").unwrap()).is_match(name)
+    RX.get_or_init(|| Regex::new(r"(?i)^\.?env(\.[\w.-]+)?$").unwrap())
+        .is_match(name)
 }
 
 pub fn declaration(line: &str) -> Option<String> {
@@ -79,7 +80,8 @@ pub fn other_reads(ext: &str, name: &str, src: &str) -> Vec<String> {
         "go" => {
             static R: OnceLock<Regex> = OnceLock::new();
             R.get_or_init(|| {
-                Regex::new(r#"os\.(?:Getenv|LookupEnv)\(\s*["`]([A-Za-z_][A-Za-z0-9_]*)["`]"#).unwrap()
+                Regex::new(r#"os\.(?:Getenv|LookupEnv)\(\s*["`]([A-Za-z_][A-Za-z0-9_]*)["`]"#)
+                    .unwrap()
             })
         }
         "rs" => {
@@ -90,7 +92,9 @@ pub fn other_reads(ext: &str, name: &str, src: &str) -> Vec<String> {
         }
         "java" | "kt" | "kts" | "scala" => {
             static R: OnceLock<Regex> = OnceLock::new();
-            R.get_or_init(|| Regex::new(r#"System\.getenv\(\s*"([A-Za-z_][A-Za-z0-9_]*)""#).unwrap())
+            R.get_or_init(|| {
+                Regex::new(r#"System\.getenv\(\s*"([A-Za-z_][A-Za-z0-9_]*)""#).unwrap()
+            })
         }
         "php" => {
             static R: OnceLock<Regex> = OnceLock::new();
@@ -118,7 +122,10 @@ pub fn other_reads(ext: &str, name: &str, src: &str) -> Vec<String> {
         {
             static R: OnceLock<Regex> = OnceLock::new();
             R.get_or_init(|| {
-                Regex::new(r"(?m)^\s*(?:ENV|ARG)\s+([A-Za-z_][A-Za-z0-9_]*)|\$\{?([A-Z_][A-Z0-9_]*)\}?").unwrap()
+                Regex::new(
+                    r"(?m)^\s*(?:ENV|ARG)\s+([A-Za-z_][A-Za-z0-9_]*)|\$\{?([A-Z_][A-Z0-9_]*)\}?",
+                )
+                .unwrap()
             })
         }
         _ => return out,
@@ -169,7 +176,9 @@ pub fn protection(ext: &str, src: &str) -> Option<&'static str> {
             if rx!(r"env_prefix\s*=|SettingsConfigDict\s*\(|class\s+\w+\s*\(\s*BaseSettings\s*\)")
                 .is_match(src)
             {
-                return Some("pydantic settings with env_prefix: names are derived from field names");
+                return Some(
+                    "pydantic settings with env_prefix: names are derived from field names",
+                );
             }
             if rx!(r"from\s+dynaconf|Dynaconf\s*\(").is_match(src) {
                 return Some("dynaconf: the loader walks a declared schema");
@@ -184,9 +193,10 @@ pub fn protection(ext: &str, src: &str) -> Option<&'static str> {
             }
         }
         "java" | "kt" | "kts" | "scala"
-            if rx!(r#"@Value\s*\(\s*["']\$\{|@ConfigurationProperties"#).is_match(src) => {
-                return Some("Spring @Value: names live in property files");
-            }
+            if rx!(r#"@Value\s*\(\s*["']\$\{|@ConfigurationProperties"#).is_match(src) =>
+        {
+            return Some("Spring @Value: names live in property files");
+        }
         _ => {}
     }
     None
@@ -194,7 +204,10 @@ pub fn protection(ext: &str, src: &str) -> Option<&'static str> {
 
 /// A read whose key is a variable blinds the negative claim just as much.
 pub fn dynamic_read(ext: &str, src: &str) -> bool {
-    if !matches!(ext, "py" | "pyi" | "js" | "jsx" | "ts" | "tsx" | "mjs" | "cjs") {
+    if !matches!(
+        ext,
+        "py" | "pyi" | "js" | "jsx" | "ts" | "tsx" | "mjs" | "cjs"
+    ) {
         return false;
     }
     static RX: OnceLock<Regex> = OnceLock::new();

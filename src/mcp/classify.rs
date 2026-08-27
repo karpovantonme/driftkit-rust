@@ -60,7 +60,10 @@ fn skip_path(rel: &str) -> bool {
         Regex::new(r"(^|/)(node_modules|dist|build|out|vendor|testdata|__pycache__|tests?|__tests__|spec|fixtures|examples?|docs?)(/|$)").unwrap()
     });
     let files = RX_FILE.get_or_init(|| {
-        Regex::new(r"(_test\.go|\.test\.[tj]sx?|\.spec\.[tj]sx?|\.d\.ts|(^|/)test_[^/]*\.py|_test\.py)$").unwrap()
+        Regex::new(
+            r"(_test\.go|\.test\.[tj]sx?|\.spec\.[tj]sx?|\.d\.ts|(^|/)test_[^/]*\.py|_test\.py)$",
+        )
+        .unwrap()
     });
     dirs.is_match(rel) || files.is_match(rel)
 }

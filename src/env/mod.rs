@@ -40,26 +40,92 @@ use std::sync::OnceLock;
 /// example file. Nobody puts PATH in `.env.example`, and requiring it there
 /// would be telling a maintainer off for something they decided on purpose.
 const AMBIENT: &[&str] = &[
-    "PATH", "HOME", "USER", "USERNAME", "LOGNAME", "PWD", "OLDPWD", "SHELL",
-    "TERM", "TMPDIR", "TEMP", "TMP", "LANG", "LANGUAGE", "TZ", "HOSTNAME",
-    "PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV", "CONDA_PREFIX", "CONDA_DEFAULT_ENV",
-    "GOPATH", "GOROOT", "JAVA_HOME", "NODE_ENV", "NODE_OPTIONS", "NVM_DIR",
-    "CI", "GITHUB_ACTIONS", "GITHUB_TOKEN", "GITHUB_REPOSITORY", "GITHUB_SHA",
-    "GITHUB_REF", "GITHUB_WORKSPACE", "GITHUB_EVENT_NAME", "GITHUB_OUTPUT",
-    "RUNNER_OS", "RUNNER_TEMP", "READTHEDOCS", "COLUMNS", "LINES", "EDITOR",
-    "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "XDG_RUNTIME_DIR",
-    "APPDATA", "LOCALAPPDATA", "PROGRAMFILES", "SYSTEMROOT", "WINDIR", "COMSPEC",
-    "PATHEXT", "SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "HTTP_PROXY", "HTTPS_PROXY",
-    "NO_PROXY", "ALL_PROXY", "DISPLAY", "SHLVL", "TERM_PROGRAM",
+    "PATH",
+    "HOME",
+    "USER",
+    "USERNAME",
+    "LOGNAME",
+    "PWD",
+    "OLDPWD",
+    "SHELL",
+    "TERM",
+    "TMPDIR",
+    "TEMP",
+    "TMP",
+    "LANG",
+    "LANGUAGE",
+    "TZ",
+    "HOSTNAME",
+    "PYTHONPATH",
+    "PYTHONHOME",
+    "VIRTUAL_ENV",
+    "CONDA_PREFIX",
+    "CONDA_DEFAULT_ENV",
+    "GOPATH",
+    "GOROOT",
+    "JAVA_HOME",
+    "NODE_ENV",
+    "NODE_OPTIONS",
+    "NVM_DIR",
+    "CI",
+    "GITHUB_ACTIONS",
+    "GITHUB_TOKEN",
+    "GITHUB_REPOSITORY",
+    "GITHUB_SHA",
+    "GITHUB_REF",
+    "GITHUB_WORKSPACE",
+    "GITHUB_EVENT_NAME",
+    "GITHUB_OUTPUT",
+    "RUNNER_OS",
+    "RUNNER_TEMP",
+    "READTHEDOCS",
+    "COLUMNS",
+    "LINES",
+    "EDITOR",
+    "XDG_CONFIG_HOME",
+    "XDG_CACHE_HOME",
+    "XDG_DATA_HOME",
+    "XDG_RUNTIME_DIR",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "PROGRAMFILES",
+    "SYSTEMROOT",
+    "WINDIR",
+    "COMSPEC",
+    "PATHEXT",
+    "SSL_CERT_FILE",
+    "REQUESTS_CA_BUNDLE",
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "NO_PROXY",
+    "ALL_PROXY",
+    "DISPLAY",
+    "SHLVL",
+    "TERM_PROGRAM",
     // 🔴 Set by a launcher rather than by a person: torchrun exports
     // LOCAL_RANK, the ML libraries export their own cache paths. Live false
     // findings on EmpaAva_System were LOCAL_RANK and MODELSCOPE_CACHE.
-    "LOCAL_RANK", "RANK", "WORLD_SIZE", "LOCAL_WORLD_SIZE", "MASTER_ADDR",
-    "MASTER_PORT", "GROUP_RANK", "ROLE_RANK", "TORCHELASTIC_RUN_ID",
-    "CUDA_VISIBLE_DEVICES", "NVIDIA_VISIBLE_DEVICES", "OMP_NUM_THREADS",
-    "MKL_NUM_THREADS", "TOKENIZERS_PARALLELISM", "HF_HOME", "HF_HUB_CACHE",
-    "TRANSFORMERS_CACHE", "MODELSCOPE_CACHE", "TORCH_HOME",
-    "PYTORCH_CUDA_ALLOC_CONF", "ACCELERATE_MIXED_PRECISION",
+    "LOCAL_RANK",
+    "RANK",
+    "WORLD_SIZE",
+    "LOCAL_WORLD_SIZE",
+    "MASTER_ADDR",
+    "MASTER_PORT",
+    "GROUP_RANK",
+    "ROLE_RANK",
+    "TORCHELASTIC_RUN_ID",
+    "CUDA_VISIBLE_DEVICES",
+    "NVIDIA_VISIBLE_DEVICES",
+    "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "TOKENIZERS_PARALLELISM",
+    "HF_HOME",
+    "HF_HUB_CACHE",
+    "TRANSFORMERS_CACHE",
+    "MODELSCOPE_CACHE",
+    "TORCH_HOME",
+    "PYTORCH_CUDA_ALLOC_CONF",
+    "ACCELERATE_MIXED_PRECISION",
 ];
 
 #[derive(Debug, Clone, Serialize)]
@@ -282,7 +348,10 @@ fn collect(root: &Path, report: &mut Report) {
 
 pub fn print_report(report: &Report, verbose: bool) {
     for (kind, title) in [
-        ("missing-from-example", "Required by the code, missing from the example"),
+        (
+            "missing-from-example",
+            "Required by the code, missing from the example",
+        ),
         ("near-miss", "Declared, unread, and a near name is read"),
         ("unread", "Declared, no reader found (soft by construction)"),
     ] {
@@ -319,7 +388,13 @@ pub fn print_report(report: &Report, verbose: bool) {
     println!(
         "  example files:          {} ({})",
         report.example_files.len(),
-        report.example_files.iter().take(3).cloned().collect::<Vec<_>>().join(", ")
+        report
+            .example_files
+            .iter()
+            .take(3)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ")
     );
     println!(
         "  variables declared:     {} (+{} commented out)",
@@ -336,16 +411,29 @@ pub fn print_report(report: &Report, verbose: bool) {
         "  reads in other langs:   {} (collected, never judged)",
         report.other_reads.len()
     );
-    println!("  declared and read:      {matched} of {}", report.declared.len());
-    println!("  declared and mentioned: {mentioned} of {}", report.declared.len());
+    println!(
+        "  declared and read:      {matched} of {}",
+        report.declared.len()
+    );
+    println!(
+        "  declared and mentioned: {mentioned} of {}",
+        report.declared.len()
+    );
     println!(
         "  susceptibility:         {}",
-        if report.protected() { "PROTECTED" } else { "susceptible" }
+        if report.protected() {
+            "PROTECTED"
+        } else {
+            "susceptible"
+        }
     );
     for p in report.protections.iter().take(4) {
         println!("      {p}");
     }
-    println!("  not parsed:             {} failed to parse", report.unparsed.len());
+    println!(
+        "  not parsed:             {} failed to parse",
+        report.unparsed.len()
+    );
     println!(
         "  files skipped:          {} (empty or over the size ceiling)",
         report.files_skipped

@@ -24,8 +24,20 @@ use walkdir::WalkDir;
 /// The single place this list is declared: in the Python kit three separate
 /// copies had already drifted apart before anybody noticed.
 pub const SKIP_DIRS: &[&str] = &[
-    ".git", ".svn", ".hg", "vendor", "node_modules", "testdata", "third_party",
-    "dist", "build", "_build", "target", "__pycache__", ".venv", "venv",
+    ".git",
+    ".svn",
+    ".hg",
+    "vendor",
+    "node_modules",
+    "testdata",
+    "third_party",
+    "dist",
+    "build",
+    "_build",
+    "target",
+    "__pycache__",
+    ".venv",
+    "venv",
 ];
 
 /// `.github` starts with a dot but is needed: CI matrices live there. A

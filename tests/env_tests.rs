@@ -55,7 +55,10 @@ fn subscript_read_with_no_example_entry_is_hard() {
     let r = run(
         &[
             (".env.example", "DATABASE_URL=postgres://localhost/app\n"),
-            ("app/settings.py", "import os\nSMTP_HOST = os.environ[\"SMTP_HOST\"]\n"),
+            (
+                "app/settings.py",
+                "import os\nSMTP_HOST = os.environ[\"SMTP_HOST\"]\n",
+            ),
         ],
         false,
     );
@@ -69,7 +72,10 @@ fn getenv_is_not_a_finding() {
     let r = run(
         &[
             (".env.example", "DATABASE_URL=x\n"),
-            ("app/settings.py", "import os\nSMTP = os.getenv(\"SMTP_HOST\")\n"),
+            (
+                "app/settings.py",
+                "import os\nSMTP = os.getenv(\"SMTP_HOST\")\n",
+            ),
         ],
         false,
     );
@@ -171,8 +177,14 @@ fn reads_in_tests_do_not_speak_for_a_newcomer() {
     let r = run(
         &[
             (".env.example", "DEBUG=1\n"),
-            ("tests/test_api.py", "import os\nK = os.environ[\"CI_ONLY_TOKEN\"]\n"),
-            ("app/conftest.py", "import os\nX = os.environ[\"ANOTHER_TEST_ONE\"]\n"),
+            (
+                "tests/test_api.py",
+                "import os\nK = os.environ[\"CI_ONLY_TOKEN\"]\n",
+            ),
+            (
+                "app/conftest.py",
+                "import os\nX = os.environ[\"ANOTHER_TEST_ONE\"]\n",
+            ),
         ],
         false,
     );
@@ -186,7 +198,10 @@ fn an_e2e_suite_does_not_speak_for_the_application() {
         &[
             (".env.example", "DEBUG=1\n"),
             ("e2e_suite.py", "import os\nPW = os.environ[\"ADMIN_PW\"]\n"),
-            ("smoke_check.py", "import os\nX = os.environ[\"OTHER_ONE\"]\n"),
+            (
+                "smoke_check.py",
+                "import os\nX = os.environ[\"OTHER_ONE\"]\n",
+            ),
         ],
         false,
     );
@@ -250,7 +265,10 @@ fn commented_declaration_silences_the_finding() {
 
 #[test]
 fn no_example_file_means_nothing_to_compare() {
-    let r = run(&[("app/s.py", "import os\nA = os.environ[\"ANYTHING\"]\n")], false);
+    let r = run(
+        &[("app/s.py", "import os\nA = os.environ[\"ANYTHING\"]\n")],
+        false,
+    );
     assert!(r.findings.is_empty());
 }
 
@@ -262,7 +280,10 @@ fn committed_env_file_silences_side_b() {
         &[
             (".env.EXAMPLE", "OPENAI_API_KEY=\n"),
             (".env.test", "DJANGO_SECRET_KEY=mock-secret\n"),
-            ("app/settings.py", "SECRET = env.str(\"DJANGO_SECRET_KEY\")\n"),
+            (
+                "app/settings.py",
+                "SECRET = env.str(\"DJANGO_SECRET_KEY\")\n",
+            ),
         ],
         false,
     );
@@ -401,7 +422,10 @@ fn a_whole_different_tail_is_not_a_near_miss() {
     let r = run(
         &[
             (".env.example", "SHORTIFY_UVICORN_HOST=0.0.0.0\n"),
-            ("app/s.py", "import os\nP = os.getenv(\"SHORTIFY_UVICORN_PORT\")\n"),
+            (
+                "app/s.py",
+                "import os\nP = os.getenv(\"SHORTIFY_UVICORN_PORT\")\n",
+            ),
         ],
         false,
     );
@@ -442,7 +466,10 @@ fn a_real_typo_inside_one_segment_is_still_caught() {
     let r = run(
         &[
             (".env.example", "MAILGUN_SENDR_ADDRESS=a@b.c\n"),
-            ("app/s.py", "import os\nS = os.getenv(\"MAILGUN_SENDER_ADDRESS\")\n"),
+            (
+                "app/s.py",
+                "import os\nS = os.getenv(\"MAILGUN_SENDER_ADDRESS\")\n",
+            ),
         ],
         false,
     );
@@ -557,7 +584,11 @@ fn pydantic_softens_side_a_and_leaves_side_b_alone() {
         .findings
         .iter()
         .any(|f| f.kind == "missing-from-example" && f.hard));
-    assert!(r.findings.iter().filter(|f| f.kind == "unread").all(|f| !f.hard));
+    assert!(r
+        .findings
+        .iter()
+        .filter(|f| f.kind == "unread")
+        .all(|f| !f.hard));
 }
 
 /// 🔴 The regression that made the tool call itself protected: a Go signal
@@ -601,7 +632,10 @@ fn a_dynamic_read_in_a_test_file_protects_nothing() {
     let r = run(
         &[
             (".env.example", "DEBUG=1\n"),
-            ("tests/conftest.py", "import os\ndef g(n):\n    return os.environ[n]\n"),
+            (
+                "tests/conftest.py",
+                "import os\ndef g(n):\n    return os.environ[n]\n",
+            ),
             ("app/s.py", "import os\nA = os.environ[\"SMTP_HOST\"]\n"),
         ],
         false,
@@ -627,6 +661,9 @@ fn a_file_that_does_not_parse_leaves_a_trace() {
 
 #[test]
 fn an_empty_file_is_counted_not_ignored() {
-    let r = run(&[(".env.example", "DEBUG=1\n"), ("app/empty.py", "")], false);
+    let r = run(
+        &[(".env.example", "DEBUG=1\n"), ("app/empty.py", "")],
+        false,
+    );
     assert!(r.files_skipped >= 1);
 }

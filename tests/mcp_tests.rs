@@ -225,7 +225,10 @@ server.registerTool("thing", { inputSchema: zodToJsonSchema(schema) },
 #[test]
 fn risk_signals_must_meet_in_one_file() {
     let dir = build(&[
-        ("schema.ts", "export const inputSchema: {type: 'object', properties: {}}\n"),
+        (
+            "schema.ts",
+            "export const inputSchema: {type: 'object', properties: {}}\n",
+        ),
         ("other.ts", "function f(x) { return x.args.foo }\n"),
     ]);
     let c = driftkit::mcp::classify::classify(&dir);
@@ -435,7 +438,9 @@ DISPATCH = {"is_dirty": _handle_is_dirty}
 "#,
     )]);
     assert!(
-        !r.findings.iter().any(|f| f.names.iter().any(|n| n == "path")),
+        !r.findings
+            .iter()
+            .any(|f| f.names.iter().any(|n| n == "path")),
         "{:?}",
         r.findings
     );

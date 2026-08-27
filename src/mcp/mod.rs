@@ -96,8 +96,11 @@ pub fn analyse(root: &Path, report: &mut Report) {
             .collect();
 
         if !read_undeclared.is_empty() {
-            let required_gap: BTreeSet<&String> =
-                t.required.iter().filter(|n| !t.reads.contains(*n)).collect();
+            let required_gap: BTreeSet<&String> = t
+                .required
+                .iter()
+                .filter(|n| !t.reads.contains(*n))
+                .collect();
             let note = if required_gap.is_empty() {
                 "the handler reads a key the schema never declares, so an agent cannot know to send it".to_string()
             } else {
@@ -152,7 +155,9 @@ fn scan_python(root: &Path) -> python::PyScan {
             .to_string_lossy()
             .replace('\\', "/");
         let base = rel.rsplit('/').next().unwrap_or(&rel);
-        if rel.contains("/test") || rel.contains("/examples/") || base.starts_with("test_")
+        if rel.contains("/test")
+            || rel.contains("/examples/")
+            || base.starts_with("test_")
             || base.ends_with("_test.py")
         {
             continue;
@@ -234,7 +239,10 @@ fn python_findings(scan: &python::PyScan, report: &mut Report) {
 
 pub fn print_report(report: &Report, verbose: bool) {
     for (kind, title) in [
-        ("read-undeclared", "Read by the handler, absent from the schema"),
+        (
+            "read-undeclared",
+            "Read by the handler, absent from the schema",
+        ),
         ("declared-unread", "Advertised by the schema, never read"),
     ] {
         let rows: Vec<&Finding> = report.findings.iter().filter(|f| f.kind == kind).collect();
@@ -252,7 +260,10 @@ pub fn print_report(report: &Report, verbose: bool) {
     }
 
     println!("\n=== Coverage ===");
-    println!("  susceptibility:         {} ({})", report.verdict, report.why);
+    println!(
+        "  susceptibility:         {} ({})",
+        report.verdict, report.why
+    );
     println!("  go files read:          {}", report.files);
     println!(
         "  tools bound to a handler: {} of {}",

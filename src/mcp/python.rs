@@ -281,7 +281,11 @@ fn expr_tree<'a>(e: &'a ast::Expr, out: &mut Vec<&'a ast::Expr>) {
     }
 }
 
-fn find_tools(body: &[ast::Stmt], file: &str, line_of: &dyn Fn(usize) -> usize) -> BTreeMap<String, Schema> {
+fn find_tools(
+    body: &[ast::Stmt],
+    file: &str,
+    line_of: &dyn Fn(usize) -> usize,
+) -> BTreeMap<String, Schema> {
     let mut out = BTreeMap::new();
     let mut exprs = Vec::new();
     walk_exprs(body, &mut exprs);
@@ -374,9 +378,11 @@ fn arg_names_in(body: &[ast::Stmt]) -> BTreeSet<String> {
                     };
                     let low = fname.to_lowercase();
                     let wrapper = matches!(fname.as_str(), "dict" | "copy" | "deepcopy")
-                        || ["sanitiz", "normaliz", "clean", "merge", "coerce", "validate", "copy"]
-                            .iter()
-                            .any(|w| low.contains(w));
+                        || [
+                            "sanitiz", "normaliz", "clean", "merge", "coerce", "validate", "copy",
+                        ]
+                        .iter()
+                        .any(|w| low.contains(w));
                     wrapper
                         && c.args
                             .iter()
@@ -399,7 +405,11 @@ fn arg_names_in(body: &[ast::Stmt]) -> BTreeSet<String> {
 }
 
 /// Keys assigned into an arguments dictionary: `call_params["k"] = ...`
-fn collect_self_assigned(stmts: &[ast::Stmt], names: &BTreeSet<String>, out: &mut BTreeSet<String>) {
+fn collect_self_assigned(
+    stmts: &[ast::Stmt],
+    names: &BTreeSet<String>,
+    out: &mut BTreeSet<String>,
+) {
     walk_assign_targets(stmts, out, names);
 }
 
@@ -409,7 +419,10 @@ fn walk_assign_targets(stmts: &[ast::Stmt], out: &mut BTreeSet<String>, names: &
             ast::Stmt::Assign(a) => {
                 for t in &a.targets {
                     if let ast::Expr::Subscript(sub) = t {
-                        if name_of(&sub.value).map(|n| names.contains(n)).unwrap_or(false) {
+                        if name_of(&sub.value)
+                            .map(|n| names.contains(n))
+                            .unwrap_or(false)
+                        {
                             if let Some(k) = literal(&sub.slice) {
                                 out.insert(k);
                             }
@@ -489,7 +502,10 @@ fn reads_of_exprs(exprs: &[&ast::Expr], names: &BTreeSet<String>) -> Reads {
     for e in exprs {
         match e {
             ast::Expr::Subscript(s) => {
-                if name_of(&s.value).map(|n| names.contains(n)).unwrap_or(false) {
+                if name_of(&s.value)
+                    .map(|n| names.contains(n))
+                    .unwrap_or(false)
+                {
                     if let Some(k) = literal(&s.slice) {
                         r.reads.insert(k);
                     }
@@ -498,7 +514,9 @@ fn reads_of_exprs(exprs: &[&ast::Expr], names: &BTreeSet<String>) -> Reads {
             ast::Expr::Call(c) => {
                 if let ast::Expr::Attribute(f) = &*c.func {
                     if matches!(f.attr.as_str(), "get" | "pop" | "setdefault")
-                        && name_of(&f.value).map(|n| names.contains(n)).unwrap_or(false)
+                        && name_of(&f.value)
+                            .map(|n| names.contains(n))
+                            .unwrap_or(false)
                     {
                         if let Some(k) = c.args.first().and_then(literal) {
                             r.reads.insert(k);
@@ -520,21 +538,22 @@ fn reads_of_exprs(exprs: &[&ast::Expr], names: &BTreeSet<String>) -> Reads {
                 }
                 for kw in &c.keywords {
                     if kw.arg.is_none()
-                        && name_of(&kw.value).map(|n| names.contains(n)).unwrap_or(false)
+                        && name_of(&kw.value)
+                            .map(|n| names.contains(n))
+                            .unwrap_or(false)
                     {
                         r.opaque = true;
                     }
                 }
             }
-            ast::Expr::BoolOp(b)
-                if matches!(b.op, ast::BoolOp::Or) && b.values.len() > 1 => {
-                    for v in &b.values[1..] {
-                        let mut inner = Vec::new();
-                        expr_tree(v, &mut inner);
-                        let sub = reads_of_exprs(&inner, names);
-                        r.synonyms.extend(sub.reads);
-                    }
+            ast::Expr::BoolOp(b) if matches!(b.op, ast::BoolOp::Or) && b.values.len() > 1 => {
+                for v in &b.values[1..] {
+                    let mut inner = Vec::new();
+                    expr_tree(v, &mut inner);
+                    let sub = reads_of_exprs(&inner, names);
+                    r.synonyms.extend(sub.reads);
                 }
+            }
             _ => {}
         }
     }
@@ -671,7 +690,9 @@ fn branch_reads(
 }
 
 fn name_from_test(test: &ast::Expr) -> Option<String> {
-    let ast::Expr::Compare(c) = test else { return None };
+    let ast::Expr::Compare(c) = test else {
+        return None;
+    };
     if c.ops.len() != 1 || !matches!(c.ops[0], ast::CmpOp::Eq) || c.comparators.len() != 1 {
         return None;
     }
@@ -742,7 +763,12 @@ pub fn scan_file(rel: &str, src: &str, scan: &mut PyScan) {
     scan.files += 1;
 
     let line_starts: Vec<usize> = std::iter::once(0)
-        .chain(src.bytes().enumerate().filter(|(_, b)| *b == b'\n').map(|(i, _)| i + 1))
+        .chain(
+            src.bytes()
+                .enumerate()
+                .filter(|(_, b)| *b == b'\n')
+                .map(|(i, _)| i + 1),
+        )
         .collect();
     let line_of = |offset: usize| match line_starts.binary_search(&offset) {
         Ok(i) => i + 1,

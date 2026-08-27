@@ -240,8 +240,9 @@ fn collect_helpers(sources: &[String]) -> Helpers {
     static FN_NAME: OnceLock<Regex> = OnceLock::new();
     let is_enricher =
         IS_ENRICHER.get_or_init(|| Regex::new(r"func\s+\w+\([^)]*\*?\w*\.?\w*Schema").unwrap());
-    let takes_args = TAKES_ARGS
-        .get_or_init(|| Regex::new(r"func\s+\w+\([^)]*\b(?:args|arguments)\s+map\[string\]").unwrap());
+    let takes_args = TAKES_ARGS.get_or_init(|| {
+        Regex::new(r"func\s+\w+\([^)]*\b(?:args|arguments)\s+map\[string\]").unwrap()
+    });
     let fn_name = FN_NAME.get_or_init(|| Regex::new(r"func\s+(\w+)").unwrap());
 
     let mut h = Helpers::default();
@@ -286,8 +287,9 @@ fn reads_of(body: &str) -> (BTreeSet<String>, bool) {
             Regex::new(r#"req\.(?:GetString|GetInt|GetBool)\(\s*"([\w\-.]+)""#).unwrap(),
         ]
     });
-    let opaque_rx =
-        OPAQUE.get_or_init(|| Regex::new(r"\bargs\b\s*\)|\.\.\.args\b|json\.Marshal\(\s*args\s*\)").unwrap());
+    let opaque_rx = OPAQUE.get_or_init(|| {
+        Regex::new(r"\bargs\b\s*\)|\.\.\.args\b|json\.Marshal\(\s*args\s*\)").unwrap()
+    });
 
     let mut reads = BTreeSet::new();
     for rx in patterns {
@@ -307,8 +309,10 @@ fn tools_in(src: &str, path: &str, helpers: &Helpers) -> Vec<Tool> {
     static LITERAL: OnceLock<Regex> = OnceLock::new();
     let with = WITH.get_or_init(|| Regex::new(r#"mcp\.With\w+\(\s*"([\w\-.]+)""#).unwrap());
     let name_rx = NAME.get_or_init(|| Regex::new(r#"Name\s*:\s*"([\w\-.]+)""#).unwrap());
-    let newtool = NEWTOOL.get_or_init(|| Regex::new(r#"mcp\.NewTool\s*\(\s*"([\w\-.]+)""#).unwrap());
-    let required = REQUIRED.get_or_init(|| Regex::new(r"Required\s*:\s*\[\]string\{([^}]*)\}").unwrap());
+    let newtool =
+        NEWTOOL.get_or_init(|| Regex::new(r#"mcp\.NewTool\s*\(\s*"([\w\-.]+)""#).unwrap());
+    let required =
+        REQUIRED.get_or_init(|| Regex::new(r"Required\s*:\s*\[\]string\{([^}]*)\}").unwrap());
     let call = CALL.get_or_init(|| Regex::new(r"\b(\w+)\s*\(").unwrap());
     let literal = LITERAL.get_or_init(|| Regex::new(r#""([\w\-.]+)""#).unwrap());
     static PASSES_ARGS: OnceLock<Regex> = OnceLock::new();
