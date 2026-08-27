@@ -115,6 +115,25 @@ fn positional_default_counts_as_a_default() {
     assert!(names(&r, "missing-from-example").is_empty());
 }
 
+/// 🔴 Live gap found by porting: the callee of a call is part of the tree.
+/// `os.getenv("X", "").strip()` keeps the inner call inside `func`, and
+/// skipping it cost 49 distinct names against 11 on one live project.
+#[test]
+fn a_read_inside_a_method_chain_is_seen() {
+    let r = run(
+        &[
+            (".env.example", "DEBUG=1\n"),
+            (
+                "app/s.py",
+                "import os\nbackend = os.getenv(\"BUS_BACKEND\", \"\").strip().lower()\nurl = (os.environ[\"BUS_URL\"]).rstrip(\"/\")\n",
+            ),
+        ],
+        false,
+    );
+    assert_eq!(names(&r, "missing-from-example"), vec!["BUS_URL"]);
+    assert!(r.py_reads.iter().any(|x| x.name == "BUS_BACKEND"));
+}
+
 /// Species H: nobody puts PATH in `.env.example`, on purpose.
 #[test]
 fn ambient_names_are_not_expected_in_an_example_file() {

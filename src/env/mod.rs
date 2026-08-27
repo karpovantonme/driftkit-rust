@@ -352,6 +352,18 @@ pub fn print_report(report: &Report, verbose: bool) {
     );
     println!("{}", core::findings_line(report.hard(), report.soft()));
 
+    if verbose {
+        // Coverage is the thing this species is really about, so -v shows
+        // what was actually read rather than only what was rejected.
+        let mut names: Vec<&str> = report.py_reads.iter().map(|r| r.name.as_str()).collect();
+        names.sort_unstable();
+        names.dedup();
+        println!("\n--- Python reads, distinct names ({}) ---", names.len());
+        for chunk in names.chunks(4) {
+            println!("  {}", chunk.join("  "));
+        }
+    }
+
     if verbose && !report.unparsed.is_empty() {
         println!("\n--- Not parsed ({}) ---", report.unparsed.len());
         for p in report.unparsed.iter().take(30) {

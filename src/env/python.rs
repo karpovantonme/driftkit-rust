@@ -232,6 +232,12 @@ impl Visitor {
             }
             ast::Expr::Call(c) => {
                 self.call(c, guard);
+                // 🔴 The callee is part of the tree too. Without this line
+                // `os.getenv("X", "").strip()` loses the inner call entirely,
+                // because the outer one holds it inside `func` rather than in
+                // an argument. On one live project that was 49 distinct names
+                // read against 11 seen.
+                self.expr(&c.func, guard);
                 for a in &c.args {
                     self.expr(a, guard);
                 }
