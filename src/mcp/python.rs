@@ -526,8 +526,8 @@ fn reads_of_exprs(exprs: &[&ast::Expr], names: &BTreeSet<String>) -> Reads {
                     }
                 }
             }
-            ast::Expr::BoolOp(b) => {
-                if matches!(b.op, ast::BoolOp::Or) && b.values.len() > 1 {
+            ast::Expr::BoolOp(b)
+                if matches!(b.op, ast::BoolOp::Or) && b.values.len() > 1 => {
                     for v in &b.values[1..] {
                         let mut inner = Vec::new();
                         expr_tree(v, &mut inner);
@@ -535,7 +535,6 @@ fn reads_of_exprs(exprs: &[&ast::Expr], names: &BTreeSet<String>) -> Reads {
                         r.synonyms.extend(sub.reads);
                     }
                 }
-            }
             _ => {}
         }
     }
