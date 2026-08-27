@@ -311,6 +311,9 @@ fn tools_in(src: &str, path: &str, helpers: &Helpers) -> Vec<Tool> {
     let required = REQUIRED.get_or_init(|| Regex::new(r"Required\s*:\s*\[\]string\{([^}]*)\}").unwrap());
     let call = CALL.get_or_init(|| Regex::new(r"\b(\w+)\s*\(").unwrap());
     let literal = LITERAL.get_or_init(|| Regex::new(r#""([\w\-.]+)""#).unwrap());
+    static PASSES_ARGS: OnceLock<Regex> = OnceLock::new();
+    let passes = PASSES_ARGS
+        .get_or_init(|| Regex::new(r"\b(\w+)\s*\(\s*(?:[^()]*?,\s*)?args\s*[,)]").unwrap());
 
     let mut out = Vec::new();
     for (off, body) in go_funcs(src) {
@@ -348,9 +351,6 @@ fn tools_in(src: &str, path: &str, helpers: &Helpers) -> Vec<Tool> {
         // 🔴 Only calls where `args` is ACTUALLY passed. Expanding by function
         // name alone mixed the shared pagination `after` into everything and
         // blew the findings up from 8 to 24 in one run.
-        static PASSES_ARGS: OnceLock<Regex> = OnceLock::new();
-        let passes = PASSES_ARGS
-            .get_or_init(|| Regex::new(r"\b(\w+)\s*\(\s*(?:[^()]*?,\s*)?args\s*[,)]").unwrap());
         for _ in 0..2 {
             let mut grew = BTreeSet::new();
             for c in passes.captures_iter(&body) {

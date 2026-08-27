@@ -310,10 +310,8 @@ impl Visitor {
             }
             ast::Expr::Starred(st) => self.expr(&st.value, guard),
             ast::Expr::Slice(sl) => {
-                for part in [&sl.lower, &sl.upper, &sl.step] {
-                    if let Some(e) = part {
-                        self.expr(e, guard);
-                    }
+                for e in [&sl.lower, &sl.upper, &sl.step].into_iter().flatten() {
+                    self.expr(e, guard);
                 }
             }
             ast::Expr::Yield(y) => {
@@ -373,15 +371,14 @@ impl Visitor {
                 };
                 self.push(name, required && guard == 0, offset);
             }
-            ast::Expr::Name(f) => {
+            ast::Expr::Name(f)
                 // env("X") / config("X") -- django-environ, decouple, starlette
-                if f.id.as_str() == "env" || f.id.as_str() == "config" {
+                if (f.id.as_str() == "env" || f.id.as_str() == "config") => {
                     if let Some(name) = c.args.first().and_then(literal) {
                         let required = !has_default(c);
                         self.push(name, required && guard == 0, offset);
                     }
                 }
-            }
             _ => {}
         }
     }

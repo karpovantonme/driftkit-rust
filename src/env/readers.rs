@@ -183,11 +183,10 @@ pub fn protection(ext: &str, src: &str) -> Option<&'static str> {
                 return Some("envconfig struct tags: names come from the tag, not from a call");
             }
         }
-        "java" | "kt" | "kts" | "scala" => {
-            if rx!(r#"@Value\s*\(\s*["']\$\{|@ConfigurationProperties"#).is_match(src) {
+        "java" | "kt" | "kts" | "scala"
+            if rx!(r#"@Value\s*\(\s*["']\$\{|@ConfigurationProperties"#).is_match(src) => {
                 return Some("Spring @Value: names live in property files");
             }
-        }
         _ => {}
     }
     None
