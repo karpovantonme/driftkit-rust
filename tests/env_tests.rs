@@ -5,13 +5,18 @@
 
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+/// 🔴 Cargo runs tests in parallel threads. The first version named the
+/// throwaway directory after a hash of the file sizes, two tests collided,
+/// and one wiped the other's tree mid-run. A counter, not a hash.
+static NEXT: AtomicUsize = AtomicUsize::new(0);
 
 fn build(files: &[(&str, &str)]) -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
         "driftkit-test-{}-{}",
         std::process::id(),
-        files.len() * 7 + files.first().map(|f| f.0.len()).unwrap_or(0) * 31
-            + files.iter().map(|f| f.1.len()).sum::<usize>()
+        NEXT.fetch_add(1, Ordering::Relaxed)
     ));
     let _ = fs::remove_dir_all(&dir);
     for (rel, body) in files {
@@ -180,6 +185,27 @@ fn all_example_files_are_taken_together() {
             (
                 "app/s.py",
                 "import os\nA = os.environ[\"SMTP_HOST\"]\nB = os.environ[\"TEST_DB\"]\n",
+            ),
+        ],
+        false,
+    );
+    assert_eq!(r.example_files.len(), 3);
+    assert!(names(&r, "missing-from-example").is_empty());
+}
+
+/// 🔴 Live gap found by porting: `.env.example.keychain` and
+/// `.env.example.1password` are example files too, and dropping them cost 16
+/// files out of 96 across the survey.
+#[test]
+fn suffixed_example_files_count_as_examples() {
+    let r = run(
+        &[
+            (".env.example", "DEBUG=1\n"),
+            ("config/.env.example.keychain", "SMTP_HOST=mail\n"),
+            ("config/.env.example.1password", "API_TOKEN=x\n"),
+            (
+                "app/s.py",
+                "import os\nA = os.environ[\"SMTP_HOST\"]\nB = os.environ[\"API_TOKEN\"]\n",
             ),
         ],
         false,

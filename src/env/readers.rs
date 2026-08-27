@@ -12,9 +12,15 @@ pub fn is_example_file(name: &str) -> bool {
     static RX: OnceLock<Regex> = OnceLock::new();
     RX.get_or_init(|| {
         Regex::new(
+            // 🔴 The last alternative is not decoration: projects ship
+            // `.env.example.keychain`, `.env.example.1password` and
+            // `.env.example.local` beside the plain one. Dropping it cost 16
+            // example files out of 96 across 60 projects, and the port only
+            // showed it because the Python numbers were the acceptance test.
             r"(?ix)^(
                   \.?env(\.[\w.-]+)?\.(example|sample|template|dist|defaults)
                 | (example|sample|template)\.env
+                | \.env\.example[\w.-]*
             )$",
         )
         .unwrap()

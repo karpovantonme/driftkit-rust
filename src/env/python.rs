@@ -158,9 +158,64 @@ impl Visitor {
                 self.block(&w.body, guard);
                 self.block(&w.orelse, guard);
             }
-            ast::Stmt::With(w) => self.block(&w.body, guard),
-            ast::Stmt::AsyncWith(w) => self.block(&w.body, guard),
-            _ => {}
+            ast::Stmt::With(w) => {
+                for item in &w.items {
+                    self.expr(&item.context_expr, guard);
+                }
+                self.block(&w.body, guard);
+            }
+            ast::Stmt::AsyncWith(w) => {
+                for item in &w.items {
+                    self.expr(&item.context_expr, guard);
+                }
+                self.block(&w.body, guard);
+            }
+            ast::Stmt::TryStar(t) => {
+                self.block(&t.body, guard + 1);
+                for h in &t.handlers {
+                    let ast::ExceptHandler::ExceptHandler(h) = h;
+                    self.block(&h.body, guard);
+                }
+                self.block(&t.orelse, guard);
+                self.block(&t.finalbody, guard);
+            }
+            ast::Stmt::Match(m) => {
+                self.expr(&m.subject, guard);
+                for case in &m.cases {
+                    self.block(&case.body, guard);
+                    if let Some(g) = &case.guard {
+                        self.expr(g, guard);
+                    }
+                }
+            }
+            ast::Stmt::Raise(r) => {
+                if let Some(e) = &r.exc {
+                    self.expr(e, guard);
+                }
+                if let Some(e) = &r.cause {
+                    self.expr(e, guard);
+                }
+            }
+            ast::Stmt::Assert(a) => {
+                self.expr(&a.test, guard);
+                if let Some(m) = &a.msg {
+                    self.expr(m, guard);
+                }
+            }
+            ast::Stmt::Delete(d) => {
+                for t in &d.targets {
+                    self.expr(t, guard);
+                }
+            }
+            ast::Stmt::TypeAlias(t) => self.expr(&t.value, guard),
+            // nothing readable inside these
+            ast::Stmt::Import(_)
+            | ast::Stmt::ImportFrom(_)
+            | ast::Stmt::Global(_)
+            | ast::Stmt::Nonlocal(_)
+            | ast::Stmt::Pass(_)
+            | ast::Stmt::Break(_)
+            | ast::Stmt::Continue(_) => {}
         }
     }
 
@@ -216,7 +271,70 @@ impl Visitor {
             }
             ast::Expr::Attribute(a) => self.expr(&a.value, guard),
             ast::Expr::Await(a) => self.expr(&a.value, guard),
-            _ => {}
+            ast::Expr::Set(v) => {
+                for e in &v.elts {
+                    self.expr(e, guard);
+                }
+            }
+            ast::Expr::ListComp(c) => {
+                self.expr(&c.elt, guard);
+                self.comprehensions(&c.generators, guard);
+            }
+            ast::Expr::SetComp(c) => {
+                self.expr(&c.elt, guard);
+                self.comprehensions(&c.generators, guard);
+            }
+            ast::Expr::GeneratorExp(c) => {
+                self.expr(&c.elt, guard);
+                self.comprehensions(&c.generators, guard);
+            }
+            ast::Expr::DictComp(c) => {
+                self.expr(&c.key, guard);
+                self.expr(&c.value, guard);
+                self.comprehensions(&c.generators, guard);
+            }
+            ast::Expr::Lambda(l) => self.expr(&l.body, guard),
+            ast::Expr::NamedExpr(n) => self.expr(&n.value, guard),
+            ast::Expr::UnaryOp(u) => self.expr(&u.operand, guard),
+            ast::Expr::Compare(c) => {
+                self.expr(&c.left, guard);
+                for e in &c.comparators {
+                    self.expr(e, guard);
+                }
+            }
+            ast::Expr::Starred(st) => self.expr(&st.value, guard),
+            ast::Expr::Slice(sl) => {
+                for part in [&sl.lower, &sl.upper, &sl.step] {
+                    if let Some(e) = part {
+                        self.expr(e, guard);
+                    }
+                }
+            }
+            ast::Expr::Yield(y) => {
+                if let Some(e) = &y.value {
+                    self.expr(e, guard);
+                }
+            }
+            ast::Expr::YieldFrom(y) => self.expr(&y.value, guard),
+            // 🔴 An f-string is a tree, not a string: `f"{os.environ['X']}"`
+            // holds a real read, and the Python kit saw it through
+            // `generic_visit` for free.
+            ast::Expr::JoinedStr(j) => {
+                for e in &j.values {
+                    self.expr(e, guard);
+                }
+            }
+            ast::Expr::FormattedValue(f) => self.expr(&f.value, guard),
+            ast::Expr::Constant(_) | ast::Expr::Name(_) => {}
+        }
+    }
+
+    fn comprehensions(&mut self, gens: &[ast::Comprehension], guard: usize) {
+        for g in gens {
+            self.expr(&g.iter, guard);
+            for cond in &g.ifs {
+                self.expr(cond, guard);
+            }
         }
     }
 
