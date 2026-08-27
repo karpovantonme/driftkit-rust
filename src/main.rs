@@ -91,7 +91,29 @@ fn main() -> ExitCode {
             }
         }
         Check::Mcp { dir, json, verbose } => {
-            let _ = (json, verbose);
+            // One directory means "read this server". Several mean "tell me
+            // which of these are worth reading at all", which is the step
+            // that removes 60% of the work.
+            if dir.len() == 1 {
+                let mut report = mcp::Report::default();
+                mcp::analyse(&dir[0], &mut report);
+                mcp::print_report(&report, verbose);
+                if let Some(path) = json {
+                    let text = serde_json::to_string_pretty(&report.findings)
+                        .unwrap_or_else(|_| "[]".into());
+                    if let Err(e) = std::fs::write(&path, text) {
+                        eprintln!("could not write {}: {e}", path.display());
+                        return ExitCode::from(2);
+                    }
+                }
+                return if report.hard() > 0 {
+                    ExitCode::from(1)
+                } else {
+                    ExitCode::SUCCESS
+                };
+            }
+
+            let _ = json;
             let mut susceptible = 0usize;
             let mut unclear = 0usize;
             for d in &dir {

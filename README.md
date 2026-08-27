@@ -56,10 +56,45 @@ driftkit env --dir PATH          # the check
 driftkit env --dir PATH --plain  # also list declared-but-unread names
 driftkit env --dir PATH --json out.json
 driftkit env --dir PATH -v       # what was read, what failed to parse
+
+driftkit mcp --dir SERVER        # read one MCP server
+driftkit mcp --dir A B C         # triage a pool: which are worth reading
 ```
 
 Exit code is `1` if and only if there is at least one hard finding, so it fits
 straight into a shell `if` or a CI step.
+
+## `mcp`: a tool schema against what its handler reads
+
+An MCP server declares each tool's input as a JSON Schema, and the agent obeys
+it literally. When the handler reads a different key, the agent has no way to
+know: either a capability is silently unreachable, or the call fails on input
+that matched the published schema.
+
+```console
+$ driftkit mcp --dir ./KiCAD-MCP-Server
+  set_active_layer   the schema requires layerName while the handler reads layer
+```
+
+That server had 15 tools that could not work at all. Go is the most
+susceptible substrate there is, because the property name is a string literal
+on both sides and the compiler has no opinion about whether the two match.
+
+🔴 **Susceptibility is decided before scanning.** Where one source feeds both
+the schema and the handler -- FastMCP, `zodToJsonSchema`, `z.infer` -- a
+mismatch is inexpressible, and the server is skipped rather than scanned and
+filtered. On a pool of 265 servers that removed 60% of the work.
+
+```console
+$ driftkit mcp --dir servers/*
+!! SUSCEPTIBLE  KiCAD-MCP-Server      the property name is a literal on both sides
+!! SUSCEPTIBLE  opencaselaw           the property name is a literal on both sides
+?  unclear      warp-sql-server-mcp   no protective signal and no risk signal, read it by hand
+```
+
+Currently reads Go. The Python and TypeScript scouts are next; the TypeScript
+one is deliberately held back until it can be done on a parse tree rather than
+regular expressions, which bound only 25% of its tools.
 
 ## What `env` reports, and what each class is worth
 
