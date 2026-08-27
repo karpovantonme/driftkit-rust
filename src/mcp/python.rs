@@ -576,8 +576,9 @@ fn branch_reads(
             match node {
                 ast::Stmt::If(_) => {
                     let mut cur = node;
-                    loop {
-                        let ast::Stmt::If(i) = cur else { break };
+                    // an elif chain is a nested If in `orelse`, and each link
+                    // shares the same preamble as the first
+                    while let ast::Stmt::If(i) = cur {
                         if let Some(name) = name_from_test(&i.test) {
                             let preamble: Vec<ast::Stmt> =
                                 seen.iter().map(|s| (*s).clone()).collect();
