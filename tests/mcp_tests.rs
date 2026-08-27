@@ -307,3 +307,156 @@ func NewTool() Tool {
     )]);
     assert!(kinds(&r, "declared-unread").is_empty(), "{:?}", r.findings);
 }
+
+// ---------------------------------------------------------------------------
+// The Python side
+// ---------------------------------------------------------------------------
+
+/// 🔴 The headline defect of KiCAD, and the port lost it once: two methods
+/// carry the name `set_active_layer`, one only forwards `params` and the real
+/// one reads `layer`. Keeping the first hid the finding entirely.
+#[test]
+fn two_methods_with_one_name_are_merged() {
+    let r = run(&[(
+        "server.py",
+        r#"
+import types
+
+TOOLS = [
+    types.Tool(name="set_active_layer", inputSchema={
+        "type": "object",
+        "properties": {"layerName": {"type": "string"}},
+        "required": ["layerName"],
+    }),
+]
+
+DISPATCH = {"set_active_layer": self._handle_set_active_layer}
+
+def forward(params):
+    return other.set_active_layer(params)
+
+def _handle_set_active_layer(params):
+    layer = params.get("layer")
+    return layer
+"#,
+    )]);
+    let names: Vec<&str> = r
+        .findings
+        .iter()
+        .filter(|f| f.tool == "set_active_layer")
+        .flat_map(|f| f.names.iter().map(|s| s.as_str()))
+        .collect();
+    assert!(names.contains(&"layerName"), "{:?}", r.findings);
+    assert!(names.contains(&"layer"), "{:?}", r.findings);
+}
+
+/// 🔴 Live false finding on KiCAD: the server writes `_deferSave` into the
+/// arguments itself before reading it back. The agent is not meant to send it,
+/// so the schema is right to stay silent.
+#[test]
+fn a_key_the_server_writes_itself_is_not_a_finding() {
+    let r = run(&[(
+        "server.py",
+        r#"
+import types
+
+TOOLS = [
+    types.Tool(name="batch_move", inputSchema={
+        "type": "object",
+        "properties": {"moves": {"type": "array"}},
+    }),
+]
+
+def _handle_batch_move(params):
+    call_params = dict(params)
+    call_params["_deferSave"] = True
+    moves = params.get("moves")
+    defer = params.get("_deferSave")
+    return (moves, defer)
+
+DISPATCH = {"batch_move": _handle_batch_move}
+"#,
+    )]);
+    assert!(
+        !r.findings
+            .iter()
+            .any(|f| f.names.iter().any(|n| n == "_deferSave")),
+        "{:?}",
+        r.findings
+    );
+}
+
+/// 🔴 The reading is lifted out of the branch. On one server that shape gave
+/// 42 phantoms across 108 tools.
+#[test]
+fn a_read_before_the_branch_still_counts() {
+    let r = run(&[(
+        "server.py",
+        r#"
+import types
+
+TOOLS = [
+    types.Tool(name="create_timeline", inputSchema={
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+    }),
+]
+
+async def call_tool(tool_name, arguments):
+    name = arguments.get("name", "")
+    if tool_name == "create_timeline":
+        return client.create_timeline(name)
+"#,
+    )]);
+    assert!(r.findings.is_empty(), "{:?}", r.findings);
+}
+
+/// 🔴 `params.get("boardPath") or params.get("path")`: the code is tolerant of
+/// several spellings on purpose, the schema declares the canonical one.
+#[test]
+fn a_synonym_chain_is_not_a_finding() {
+    let r = run(&[(
+        "server.py",
+        r#"
+import types
+
+TOOLS = [
+    types.Tool(name="is_dirty", inputSchema={
+        "type": "object",
+        "properties": {"boardPath": {"type": "string"}},
+    }),
+]
+
+def _handle_is_dirty(params):
+    path = params.get("boardPath") or params.get("path")
+    return path
+
+DISPATCH = {"is_dirty": _handle_is_dirty}
+"#,
+    )]);
+    assert!(
+        !r.findings.iter().any(|f| f.names.iter().any(|n| n == "path")),
+        "{:?}",
+        r.findings
+    );
+}
+
+/// A schema built from a pydantic model has one source feeding both sides, so
+/// the species cannot exist and the server is never parsed.
+#[test]
+fn a_pydantic_schema_is_out_of_scope() {
+    let r = run(&[(
+        "server.py",
+        r#"
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("demo")
+
+@mcp.tool()
+def add(a: int, b: int) -> int:
+    return a + b
+"#,
+    )]);
+    assert_eq!(r.verdict, "protected");
+    assert!(r.findings.is_empty());
+}

@@ -92,9 +92,13 @@ $ driftkit mcp --dir servers/*
 ?  unclear      warp-sql-server-mcp   no protective signal and no risk signal, read it by hand
 ```
 
-Currently reads Go. The Python and TypeScript scouts are next; the TypeScript
-one is deliberately held back until it can be done on a parse tree rather than
-regular expressions, which bound only 25% of its tools.
+Reads Go and Python. On the KiCAD server that is 123 schemas out of 123 bound
+to their handlers.
+
+The TypeScript scout is deliberately held back until it can be done on a parse
+tree rather than regular expressions, which bound only 25% of its tools.
+Shipping it as it stands would mean shipping a scanner that misses three
+quarters of what it looks at and says nothing about it.
 
 ## What `env` reports, and what each class is worth
 

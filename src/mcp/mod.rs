@@ -17,6 +17,7 @@
 
 pub mod classify;
 pub mod go;
+pub mod python;
 
 use serde::Serialize;
 use std::collections::BTreeSet;
@@ -74,8 +75,9 @@ pub fn analyse(root: &Path, report: &mut Report) {
     }
 
     let scan = go::scan(root);
-    report.files = scan.files;
-    report.tools_total = scan.tools.len();
+    let py = scan_python(root);
+    report.files = scan.files + py.files;
+    report.tools_total = scan.tools.len() + py.schemas.len();
 
     for t in &scan.tools {
         report.tools_bound += 1;
@@ -130,6 +132,100 @@ pub fn analyse(root: &Path, report: &mut Report) {
                 names: declared_unread,
                 file: t.file.clone(),
                 line: t.line,
+                note: "the schema advertises a property the handler never looks at".into(),
+            });
+        }
+    }
+    python_findings(&py, report);
+}
+
+/// One walk over the Python files, then schemas matched to handlers.
+fn scan_python(root: &Path) -> python::PyScan {
+    let mut scan = python::PyScan::default();
+    for path in core::walk(root) {
+        if path.extension().map(|e| e != "py").unwrap_or(true) {
+            continue;
+        }
+        let rel = path
+            .strip_prefix(root)
+            .unwrap_or(&path)
+            .to_string_lossy()
+            .replace('\\', "/");
+        let base = rel.rsplit('/').next().unwrap_or(&rel);
+        if rel.contains("/test") || rel.contains("/examples/") || base.starts_with("test_")
+            || base.ends_with("_test.py")
+        {
+            continue;
+        }
+        if let Some(src) = core::read_text(&path) {
+            python::scan_file(&rel, &src, &mut scan);
+        }
+    }
+    scan
+}
+
+fn python_findings(scan: &python::PyScan, report: &mut Report) {
+    for (name, schema) in &scan.schemas {
+        // 🔴 A name may appear BOTH in an `if name ==` branch AND in a dispatch
+        // table. Taking the first source is wrong: in KiCAD the branch was an
+        // empty stub while the real reading lived in the dispatcher's method,
+        // and the tool looked like it read nothing at all.
+        let mut full = python::Reads::default();
+        let mut own = python::Reads::default();
+        let mut bound = false;
+        if let Some(r) = scan.branches.get(name) {
+            full.merge(r);
+            bound = true;
+        }
+        if let Some(r) = scan.branches_own.get(name) {
+            own.merge(r);
+        }
+        if let Some(method) = scan.dispatch.get(name) {
+            if let Some(r) = scan.funcs.get(method) {
+                full.merge(r);
+                own.merge(r);
+                bound = true;
+            }
+        }
+        if !bound {
+            continue;
+        }
+        report.tools_bound += 1;
+        report.tool_names.push(name.clone());
+
+        let declared_unread: Vec<String> = schema.props.difference(&full.reads).cloned().collect();
+        // 🔴 The dispatcher preamble is shared by ALL its branches, so a branch
+        // that does not use it was getting a false "read but not declared".
+        // The preamble silences "declared but unread" and takes no part in the
+        // extras.
+        let read_undeclared: Vec<String> = own
+            .reads
+            .difference(&schema.props)
+            .filter(|n| !full.synonyms.contains(*n) && !own.synonyms.contains(*n))
+            .filter(|n| !PROTOCOL.contains(&n.as_str()))
+            .filter(|n| !scan.self_assigned.contains(*n))
+            .cloned()
+            .collect();
+
+        if !read_undeclared.is_empty() {
+            report.findings.push(Finding {
+                hard: true,
+                kind: "read-undeclared".into(),
+                tool: name.clone(),
+                names: read_undeclared,
+                file: schema.file.clone(),
+                line: schema.line,
+                note: "the handler reads a key the schema never declares".into(),
+            });
+        }
+        if !declared_unread.is_empty() && !full.opaque {
+            report.findings.push(Finding {
+                hard: true,
+                kind: "declared-unread".into(),
+                tool: name.clone(),
+                names: declared_unread,
+                file: schema.file.clone(),
+                line: schema.line,
                 note: "the schema advertises a property the handler never looks at".into(),
             });
         }
