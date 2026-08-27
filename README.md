@@ -1,6 +1,10 @@
-# driftkit
+# driftkit-rust
 
 **Finds where a project's promises and its code disagree.**
+
+The Rust rewrite of [driftkit](https://github.com/karpovantonme/driftkit).
+Same species, one binary, no runtime to install. The Python kit stays where
+it is and keeps the checks this one has not taken over yet.
 
 A promise is anything a reader can check: an example env file, a tool schema,
 a docstring, a support matrix. Nobody runs a promise, so it rots quietly while
@@ -43,7 +47,7 @@ newcomer meets this in their first ten minutes.
 ## Install
 
 ```console
-cargo install --git https://github.com/karpovantonme/driftkit
+cargo install --git https://github.com/karpovantonme/driftkit-rust
 ```
 
 Or build it: `cargo build --release`, and the binary lands in
@@ -162,6 +166,18 @@ became a rule:
 Every run prints what was compared, not only what was found. A scan that
 matched 3 of 40 must not look as healthy as one that matched 40 of 40, and
 without a binding counter it does.
+
+## Two releases, on purpose
+
+| | |
+|---|---|
+| [**driftkit**](https://github.com/karpovantonme/driftkit) | the Python kit: 14 checks, including species this one does not carry yet -- docstrings against signatures, CI matrices against declared support, vendored copies against upstream fixes, dead links |
+| **driftkit-rust** (here) | two checks so far, `env` and `mcp`, as one 3 MB binary with nothing to install |
+
+Neither replaces the other. A check moves here when it has been measured on
+live projects and the numbers match the Python run exactly -- that is the
+acceptance test each port has to pass, and it caught three real bugs in the
+first one.
 
 ## The contract
 
