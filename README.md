@@ -8,7 +8,7 @@ it is and keeps the checks this one has not taken over yet.
 
 A promise is anything a reader can check: an example env file, a tool schema,
 a docstring, a support matrix. Nobody runs a promise, so it rots quietly while
-the code moves on. `driftkit` reads both sides and reports only where they
+the code moves on. This reads both sides and reports only where they
 actually disagree.
 
 ```console
