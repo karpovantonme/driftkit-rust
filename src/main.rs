@@ -6,7 +6,7 @@
 //! for the single contract in `core`, and for the conformance rules baked
 //! into the shape of this file.
 
-use driftkit::env;
+use driftkit::{env, mcp};
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -33,6 +33,18 @@ enum Check {
         /// Also list declared-but-unread names (soft, and noisy)
         #[arg(long)]
         plain: bool,
+        /// Write findings to JSON
+        #[arg(long)]
+        json: Option<PathBuf>,
+        /// List what was dismissed and what went unmatched
+        #[arg(short, long)]
+        verbose: bool,
+    },
+    /// An MCP tool's input schema against what its handler reads
+    Mcp {
+        /// Server directory. Repeatable, so a whole pool can be triaged.
+        #[arg(long, num_args = 1..)]
+        dir: Vec<PathBuf>,
         /// Write findings to JSON
         #[arg(long)]
         json: Option<PathBuf>,
@@ -78,5 +90,49 @@ fn main() -> ExitCode {
                 ExitCode::SUCCESS
             }
         }
+        Check::Mcp { dir, json, verbose } => {
+            let _ = (json, verbose);
+            let mut susceptible = 0usize;
+            let mut unclear = 0usize;
+            for d in &dir {
+                let c = mcp::classify::classify(d);
+                let name = d
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| d.display().to_string());
+                let mark = match c.verdict {
+                    mcp::classify::Verdict::Susceptible => {
+                        susceptible += 1;
+                        "!!"
+                    }
+                    mcp::classify::Verdict::Unclear => {
+                        unclear += 1;
+                        "? "
+                    }
+                    _ => "  ",
+                };
+                println!(
+                    "{mark} {:<12} {:<40} {}",
+                    c.verdict.label(),
+                    truncate(&name, 40),
+                    truncate(&c.why, 64)
+                );
+            }
+            println!(
+                "\n=== Coverage ===\n  servers looked at:      {}\n  susceptible:            {susceptible}\n  unclear, read by hand:  {unclear}\n  worth parsing:          {} of {}",
+                dir.len(),
+                susceptible + unclear,
+                dir.len()
+            );
+            ExitCode::SUCCESS
+        }
+    }
+}
+
+fn truncate(s: &str, n: usize) -> String {
+    if s.chars().count() <= n {
+        s.to_string()
+    } else {
+        s.chars().take(n - 1).collect::<String>() + "…"
     }
 }
