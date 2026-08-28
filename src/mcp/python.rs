@@ -294,10 +294,8 @@ fn expr_tree<'a>(e: &'a ast::Expr, out: &mut Vec<&'a ast::Expr>) {
         }
         ast::Expr::Starred(st) => expr_tree(&st.value, out),
         ast::Expr::Slice(sl) => {
-            for part in [&sl.lower, &sl.upper, &sl.step] {
-                if let Some(e) = part {
-                    expr_tree(e, out);
-                }
+            for e in [&sl.lower, &sl.upper, &sl.step].into_iter().flatten() {
+                expr_tree(e, out);
             }
         }
         ast::Expr::Yield(y) => {
