@@ -38,6 +38,7 @@ pub fn read_file(rel: &str, src: &str) -> Option<PyOutcome> {
         file: rel.to_string(),
         out: PyOutcome::default(),
         lines: line_starts(src),
+        guarded: Vec::new(),
     };
     v.block(&suite, 0);
     Some(v.out)
@@ -57,9 +58,21 @@ struct Visitor {
     file: String,
     out: PyOutcome,
     lines: Vec<usize>,
+    /// Names a surrounding condition has proved present.
+    guarded: Vec<String>,
 }
 
 impl Visitor {
+    /// Is a missing `name` harmless at this point.
+    ///
+    /// Two different things make it so, and they are not the same shape:
+    /// `try/except` catches whatever the block raises, so it covers every
+    /// name inside; a condition proves one specific name present, and says
+    /// nothing about the others.
+    fn safe(&self, name: &str, guard: usize) -> bool {
+        guard > 0 || self.guarded.iter().any(|n| n == name)
+    }
+
     fn line_of(&self, offset: usize) -> usize {
         match self.lines.binary_search(&offset) {
             Ok(i) => i + 1,
@@ -111,8 +124,11 @@ impl Visitor {
                 // `elif load_from_env and 'ENABLED_PLUGINS' in os.environ:`.
                 // Typing the root of the condition missed it, because the
                 // membership check lives inside a BoolOp. Walk the condition.
-                let guarded = tests_membership(&i.test);
-                self.block(&i.body, guard + usize::from(guarded));
+                let names = guarded_names(&i.test);
+                let added = names.len();
+                self.guarded.extend(names);
+                self.block(&i.body, guard);
+                self.guarded.truncate(self.guarded.len() - added);
                 self.block(&i.orelse, guard);
                 self.expr(&i.test, guard);
             }
@@ -224,7 +240,8 @@ impl Visitor {
             ast::Expr::Subscript(s) => {
                 if is_environ(&s.value) {
                     if let Some(name) = literal(&s.slice) {
-                        self.push(name, guard == 0, s.range.start().to_usize());
+                        let required = !self.safe(&name, guard);
+                        self.push(name, required, s.range.start().to_usize());
                     }
                 }
                 self.expr(&s.value, guard);
@@ -246,8 +263,18 @@ impl Visitor {
                 }
             }
             ast::Expr::BoolOp(b) => {
-                for v in &b.values {
-                    self.expr(v, guard);
+                // 🔴 `env("MODEL") or "deepseek/deepseek-chat"`: a call on the
+                // left of `or` has a fallback, so a missing variable cannot
+                // stop anything. Live false finding on a 20-star project,
+                // where `env` was the project's own helper returning None
+                // rather than django-environ.
+                //
+                // A subscript is different: `os.environ["X"] or "y"` raises
+                // while evaluating the left side, before `or` is reached.
+                let fallback = matches!(b.op, ast::BoolOp::Or) && b.values.len() > 1;
+                for (i, v) in b.values.iter().enumerate() {
+                    let softened = fallback && i + 1 < b.values.len() && !contains_subscript(v);
+                    self.expr(v, guard + usize::from(softened));
                 }
             }
             ast::Expr::BinOp(b) => {
@@ -369,14 +396,16 @@ impl Visitor {
                     }
                     _ => return,
                 };
-                self.push(name, required && guard == 0, offset);
+                let required = required && !self.safe(&name, guard);
+                self.push(name, required, offset);
             }
             ast::Expr::Name(f)
                 // env("X") / config("X") -- django-environ, decouple, starlette
                 if (f.id.as_str() == "env" || f.id.as_str() == "config") => {
                     if let Some(name) = c.args.first().and_then(literal) {
                         let required = !has_default(c);
-                        self.push(name, required && guard == 0, offset);
+                        let required = required && !self.safe(&name, guard);
+                self.push(name, required, offset);
                     }
                 }
             _ => {}
@@ -391,6 +420,17 @@ impl Visitor {
             file: self.file.clone(),
             line,
         });
+    }
+}
+
+/// Does this expression read the environment by subscript, which raises on
+/// the spot rather than returning something falsy.
+fn contains_subscript(e: &ast::Expr) -> bool {
+    match e {
+        ast::Expr::Subscript(s) => is_environ(&s.value),
+        ast::Expr::Call(c) => c.args.iter().any(contains_subscript),
+        ast::Expr::BoolOp(b) => b.values.iter().any(contains_subscript),
+        _ => false,
     }
 }
 
@@ -429,17 +469,59 @@ fn has_default(c: &ast::ExprCall) -> bool {
 }
 
 /// Does this condition ask whether the variable is there at all.
-fn tests_membership(test: &ast::Expr) -> bool {
+///
+/// Two shapes count, and the second cost 15 false findings on one live
+/// project before it was added:
+///
+/// ```text
+/// if "X" in os.environ:          if os.environ.get("X"):
+///     v = os.environ["X"]            args.x = os.environ["X"]
+/// ```
+///
+/// 🔴 The check is per name, not per branch. A blanket guard would silence
+/// `os.environ["B"]` sitting under `if os.environ.get("A"):`, which is a
+/// genuine crash.
+/// Names this condition proves present.
+fn guarded_names(test: &ast::Expr) -> Vec<String> {
+    let mut out = Vec::new();
+    collect_guarded(test, &mut out);
+    out
+}
+
+fn collect_guarded(test: &ast::Expr, out: &mut Vec<String>) {
     match test {
         ast::Expr::Compare(c) => {
             let is_in = c
                 .ops
                 .iter()
                 .any(|o| matches!(o, ast::CmpOp::In | ast::CmpOp::NotIn));
-            is_in && c.comparators.iter().any(is_environ)
+            if is_in && c.comparators.iter().any(is_environ) {
+                if let Some(n) = literal(c.left.as_ref()) {
+                    out.push(n);
+                }
+            }
         }
-        ast::Expr::BoolOp(b) => b.values.iter().any(tests_membership),
-        ast::Expr::UnaryOp(u) => tests_membership(&u.operand),
-        _ => false,
+        ast::Expr::Call(c) => {
+            // if os.environ.get("X"): / if os.getenv("X"):
+            let reads_env = match &*c.func {
+                ast::Expr::Attribute(f) => {
+                    (f.attr.as_str() == "get" && is_environ(&f.value))
+                        || (f.attr.as_str() == "getenv" && is_os(&f.value))
+                }
+                _ => false,
+            };
+            if reads_env {
+                if let Some(n) = c.args.first().and_then(literal) {
+                    out.push(n);
+                }
+            }
+        }
+        ast::Expr::BoolOp(b) => {
+            for v in &b.values {
+                collect_guarded(v, out);
+            }
+        }
+        ast::Expr::UnaryOp(u) => collect_guarded(&u.operand, out),
+        _ => {}
     }
 }

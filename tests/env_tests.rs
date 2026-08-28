@@ -358,6 +358,80 @@ fn membership_check_in_an_elif_counts_too() {
     assert!(names(&r, "missing-from-example").is_empty());
 }
 
+/// 🔴 Live false finding on a 20-star project: `env("MODEL") or "default"`,
+/// where `env` was the project's own helper returning None. A call on the
+/// left of `or` has a fallback and cannot stop anything.
+#[test]
+fn a_call_before_or_has_a_fallback() {
+    let r = run(
+        &[
+            (".env.example", "DEBUG=1\n"),
+            (
+                "app/s.py",
+                "model = env(\"WRITER_MODEL\") or \"deepseek\"\ntoken = env(\"TOKEN_A\") or env(\"TOKEN_B\")\n",
+            ),
+        ],
+        false,
+    );
+    assert_eq!(names(&r, "missing-from-example"), vec!["TOKEN_B"]);
+}
+
+/// 🔴 But a subscript raises while the left side is evaluated, before `or`
+/// is ever reached.
+#[test]
+fn a_subscript_before_or_still_raises() {
+    let r = run(
+        &[
+            (".env.example", "DEBUG=1\n"),
+            (
+                "app/s.py",
+                "import os\nhost = os.environ[\"SMTP_HOST\"] or \"localhost\"\n",
+            ),
+        ],
+        false,
+    );
+    assert_eq!(names(&r, "missing-from-example"), vec!["SMTP_HOST"]);
+}
+
+/// 🔴 Live false finding on a live project, 15 of them in one file:
+/// `if os.environ.get("X"): args.x = os.environ["X"]`. The guard was written
+/// for `"X" in os.environ` only, and this shape is just as common.
+#[test]
+fn a_get_in_the_condition_guards_the_read() {
+    let r = run(
+        &[
+            (".env.example", "DEBUG=1\n"),
+            (
+                "app/s.py",
+                "import os\nlevel = None\nif os.environ.get(\"LOG_LEVEL\"):\n    level = os.environ[\"LOG_LEVEL\"]\n",
+            ),
+        ],
+        false,
+    );
+    assert!(
+        names(&r, "missing-from-example").is_empty(),
+        "{:?}",
+        r.findings
+    );
+}
+
+/// 🔴 And the guard is per name: a different variable under the same
+/// condition still crashes.
+#[test]
+fn a_guard_on_one_name_does_not_cover_another() {
+    let r = run(
+        &[
+            (".env.example", "DEBUG=1\n"),
+            (
+                "app/s.py",
+                "import os\nv = None\nif os.environ.get(\"MODE\"):\n    v = os.environ[\"SMTP_HOST\"]\n",
+            ),
+        ],
+        false,
+    );
+    assert_eq!(names(&r, "missing-from-example"), vec!["SMTP_HOST"]);
+}
+
 #[test]
 fn a_name_the_code_sets_itself_is_not_required() {
     let r = run(
