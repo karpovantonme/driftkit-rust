@@ -465,3 +465,38 @@ def add(a: int, b: int) -> int:
     assert_eq!(r.verdict, "protected");
     assert!(r.findings.is_empty());
 }
+
+/// 🔴 Live false finding, 19 tools on one server: the handler passed
+/// `arguments` to a shared `_confirm_gate(...)` inside a walrus,
+/// `if err := _confirm_gate("close_project", arguments, ...)`. The walk did
+/// not descend into `NamedExpr`, so the handler never looked opaque and every
+/// tool was reported as never reading `confirm`.
+#[test]
+fn a_walrus_does_not_hide_the_handoff() {
+    let r = run(&[(
+        "server.py",
+        r#"
+import types
+
+TOOLS = [
+    types.Tool(name="close_project", inputSchema={
+        "type": "object",
+        "properties": {"confirm": {"type": "boolean"}},
+        "required": ["confirm"],
+    }),
+]
+
+def _confirm_gate(name, arguments, description):
+    if not arguments.get("confirm", False):
+        return "refused"
+    return None
+
+async def call_tool(tool_name, arguments):
+    if tool_name == "close_project":
+        if err := _confirm_gate("close_project", arguments, "loses changes"):
+            return err
+        return client.close_project()
+"#,
+    )]);
+    assert!(r.findings.is_empty(), "{:?}", r.findings);
+}

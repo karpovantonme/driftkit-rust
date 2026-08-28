@@ -277,7 +277,61 @@ fn expr_tree<'a>(e: &'a ast::Expr, out: &mut Vec<&'a ast::Expr>) {
         }
         ast::Expr::FormattedValue(f) => expr_tree(&f.value, out),
         ast::Expr::Lambda(l) => expr_tree(&l.body, out),
-        _ => {}
+        // 🔴 The walrus hid `_confirm_gate("close_project", arguments, ...)`
+        // inside `if err := ...`, so the handler never looked opaque and 19
+        // tools were reported as never reading `confirm`. The match is
+        // exhaustive on purpose: the compiler lists what a hand-written walk
+        // forgets, and this is what it forgot.
+        ast::Expr::NamedExpr(n) => {
+            expr_tree(&n.value, out);
+            expr_tree(&n.target, out);
+        }
+        ast::Expr::Compare(c) => {
+            expr_tree(&c.left, out);
+            for e in &c.comparators {
+                expr_tree(e, out);
+            }
+        }
+        ast::Expr::Starred(st) => expr_tree(&st.value, out),
+        ast::Expr::Slice(sl) => {
+            for part in [&sl.lower, &sl.upper, &sl.step] {
+                if let Some(e) = part {
+                    expr_tree(e, out);
+                }
+            }
+        }
+        ast::Expr::Yield(y) => {
+            if let Some(e) = &y.value {
+                expr_tree(e, out);
+            }
+        }
+        ast::Expr::YieldFrom(y) => expr_tree(&y.value, out),
+        ast::Expr::ListComp(c) => {
+            expr_tree(&c.elt, out);
+            for g in &c.generators {
+                expr_tree(&g.iter, out);
+            }
+        }
+        ast::Expr::SetComp(c) => {
+            expr_tree(&c.elt, out);
+            for g in &c.generators {
+                expr_tree(&g.iter, out);
+            }
+        }
+        ast::Expr::GeneratorExp(c) => {
+            expr_tree(&c.elt, out);
+            for g in &c.generators {
+                expr_tree(&g.iter, out);
+            }
+        }
+        ast::Expr::DictComp(c) => {
+            expr_tree(&c.key, out);
+            expr_tree(&c.value, out);
+            for g in &c.generators {
+                expr_tree(&g.iter, out);
+            }
+        }
+        ast::Expr::Constant(_) | ast::Expr::Name(_) => {}
     }
 }
 
